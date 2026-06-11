@@ -5,6 +5,7 @@
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS status       TEXT DEFAULT 'open';
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS closed_at    TIMESTAMPTZ;
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS product_name TEXT;
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS agent_name   TEXT;
 
 
 -- ─────────────────────────────────────────────────────────────────

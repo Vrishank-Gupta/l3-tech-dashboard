@@ -1,7 +1,7 @@
 /* globals supabase, SUPABASE_URL, SUPABASE_ANON_KEY, PRODUCT_DATA, XLSX */
 
 const FIELDS = [
-  'ticket_id','subject','product_name',
+  'ticket_id','subject','agent_name','product_name',
   'symptom','defect','repair',
   'tech_name','first_referred_date','comments'
 ];
@@ -178,7 +178,7 @@ function render(tickets) {
     tickets.length === 1 ? '1 ticket' : `${tickets.length} tickets`;
 
   if (tickets.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="11" class="empty">No tickets found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" class="empty">No tickets found.</td></tr>';
     return;
   }
 
@@ -196,6 +196,7 @@ function render(tickets) {
       <td title="${x(t.ticket_id)}">${x(t.ticket_id)}</td>
       <td title="${x(t.product_name)}">${x(t.product_name)}</td>
       <td title="${x(t.subject)}">${x(t.subject)}</td>
+      <td title="${x(t.agent_name)}">${x(t.agent_name)}</td>
       <td title="${x(t.symptom)}">${x(t.symptom)}</td>
       <td title="${x(t.defect)}">${x(t.defect)}</td>
       <td title="${x(t.repair)}">${x(t.repair)}</td>
@@ -275,18 +276,21 @@ async function reopenTicket(id) {
 function openModal(id) {
   document.getElementById('f_id').value = '';
   // Reset plain inputs
-  ['ticket_id','subject','tech_name','first_referred_date','comments']
+  ['ticket_id','subject','agent_name','tech_name','comments']
     .forEach(f => { document.getElementById('f_' + f).value = ''; });
+  // Default date to today for new tickets
+  document.getElementById('f_first_referred_date').value = new Date().toISOString().split('T')[0];
 
   if (id) {
     const t = allTickets.find(t => t.id === id);
     if (t) {
       document.getElementById('f_id').value = id;
-      document.getElementById('f_ticket_id').value          = t.ticket_id           || '';
-      document.getElementById('f_subject').value            = t.subject              || '';
-      document.getElementById('f_tech_name').value          = t.tech_name            || '';
-      document.getElementById('f_first_referred_date').value = t.first_referred_date || '';
-      document.getElementById('f_comments').value           = t.comments             || '';
+      document.getElementById('f_ticket_id').value           = t.ticket_id           || '';
+      document.getElementById('f_subject').value             = t.subject              || '';
+      document.getElementById('f_agent_name').value          = t.agent_name           || '';
+      document.getElementById('f_tech_name').value           = t.tech_name            || '';
+      document.getElementById('f_first_referred_date').value = t.first_referred_date  || '';
+      document.getElementById('f_comments').value            = t.comments             || '';
       restoreCascade(t);
     }
     document.getElementById('modalTitle').textContent = 'Edit Ticket';
@@ -345,11 +349,11 @@ async function deleteTicket(id) {
 
 // ── Suggestions (tech name datalist) ─────────────────────────
 async function refreshSuggestions() {
-  const { data } = await db.from('tickets').select('tech_name');
+  const { data } = await db.from('tickets').select('tech_name, agent_name');
   if (!data) return;
-  const names = [...new Set(data.map(t => t.tech_name).filter(Boolean))].sort();
-  document.getElementById('dl-tech-name').innerHTML =
-    names.map(n => `<option value="${x(n)}"></option>`).join('');
+  const uniq = field => [...new Set(data.map(t => t[field]).filter(Boolean))].sort();
+  document.getElementById('dl-tech-name').innerHTML  = uniq('tech_name').map(n  => `<option value="${x(n)}"></option>`).join('');
+  document.getElementById('dl-agent-name').innerHTML = uniq('agent_name').map(n => `<option value="${x(n)}"></option>`).join('');
 }
 
 // ── Export ────────────────────────────────────────────────────
@@ -360,6 +364,7 @@ function exportToExcel() {
     'Ticket ID':     t.ticket_id     || '',
     'Product':       t.product_name  || '',
     'Subject':       t.subject       || '',
+    'Agent':         t.agent_name    || '',
     'Symptom':       t.symptom       || '',
     'Defect':        t.defect        || '',
     'Repair':        t.repair        || '',
