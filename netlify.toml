@@ -1,0 +1,3 @@
+[build]
+  publish = "public"
+  # No build command — pure static site

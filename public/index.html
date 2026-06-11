@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>L3 Support Tracker</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Config banner (shown when credentials are not set) -->
+  <div id="setupBanner" class="setup-banner hidden">
+    <strong>Setup required:</strong>
+    Open <code>config.js</code> and replace the placeholder URL and key with your
+    Supabase project credentials, then reload.
+    See <code>README.md</code> for step-by-step instructions.
+  </div>
+
+  <header>
+    <div class="header-inner">
+      <div>
+        <h1>L3 Support Tracker</h1>
+        <span id="ticketCount" class="ticket-count"></span>
+      </div>
+      <button class="btn-primary" onclick="openModal()">+ Add Ticket</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="toolbar">
+      <input
+        type="text"
+        id="searchInput"
+        placeholder="Search by Ticket ID, Fault Code, or Tech Name…"
+        oninput="onSearch()"
+      />
+      <button id="sortBtn" class="btn-sort active" onclick="toggleSort()">
+        Sort: Pendency ↓
+      </button>
+    </div>
+
+    <div id="errorMsg" class="error-msg hidden"></div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Ticket ID</th>
+            <th>Subject</th>
+            <th>Fault Code</th>
+            <th>L1</th>
+            <th>L2</th>
+            <th>Symptom</th>
+            <th>Defect</th>
+            <th>Repair</th>
+            <th>Tech Person</th>
+            <th>First Referred</th>
+            <th class="col-center">Pendency<br/>(Days)</th>
+            <th>Comments</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="ticketBody">
+          <tr>
+            <td colspan="13" class="empty">Loading…</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Add / Edit Modal -->
+  <div id="modalOverlay" class="modal-overlay hidden" onclick="overlayClick(event)">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modalTitle">Add Ticket</h2>
+        <button class="close-btn" onclick="closeModal()">✕</button>
+      </div>
+      <form id="ticketForm" onsubmit="saveTicket(event)">
+        <input type="hidden" id="f_id" />
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Ticket ID</label>
+            <input type="text" id="f_ticket_id" />
+          </div>
+          <div class="form-group">
+            <label>Subject</label>
+            <input type="text" id="f_subject" />
+          </div>
+          <div class="form-group">
+            <label>Fault Code</label>
+            <input type="text" id="f_fault_code" />
+          </div>
+          <div class="form-group">
+            <label>Fault Code Level 1</label>
+            <input type="text" id="f_fault_code_l1" />
+          </div>
+          <div class="form-group">
+            <label>Fault Code Level 2</label>
+            <input type="text" id="f_fault_code_l2" />
+          </div>
+          <div class="form-group">
+            <label>Tech Person Name</label>
+            <input type="text" id="f_tech_name" />
+          </div>
+          <div class="form-group">
+            <label>First Referred Date</label>
+            <input type="date" id="f_first_referred_date" />
+          </div>
+          <div class="form-group span2">
+            <label>Symptom</label>
+            <textarea id="f_symptom" rows="2"></textarea>
+          </div>
+          <div class="form-group span2">
+            <label>Defect</label>
+            <textarea id="f_defect" rows="2"></textarea>
+          </div>
+          <div class="form-group span2">
+            <label>Repair</label>
+            <textarea id="f_repair" rows="2"></textarea>
+          </div>
+          <div class="form-group span2">
+            <label>Comments</label>
+            <textarea id="f_comments" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+          <button type="submit" class="btn-primary" id="saveBtn">Save Ticket</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
