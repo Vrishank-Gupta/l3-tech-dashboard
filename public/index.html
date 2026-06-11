@@ -8,12 +8,10 @@
 </head>
 <body>
 
-  <!-- Config banner (shown when credentials are not set) -->
   <div id="setupBanner" class="setup-banner hidden">
     <strong>Setup required:</strong>
     Open <code>config.js</code> and replace the placeholder URL and key with your
-    Supabase project credentials, then reload.
-    See <code>README.md</code> for step-by-step instructions.
+    Supabase project credentials, then reload. See <code>README.md</code> for instructions.
   </div>
 
   <header>
@@ -36,7 +34,7 @@
       <input
         type="text"
         id="searchInput"
-        placeholder="Search by Ticket ID, Fault Code, or Tech Name…"
+        placeholder="Search by Ticket ID, Product, or Tech Name…"
         oninput="onSearch()"
       />
       <button id="sortBtn" class="btn-sort active" onclick="toggleSort()">
@@ -54,10 +52,8 @@
         <thead>
           <tr>
             <th>Ticket ID</th>
+            <th>Product</th>
             <th>Subject</th>
-            <th>Fault Code</th>
-            <th>L1</th>
-            <th>L2</th>
             <th>Symptom</th>
             <th>Defect</th>
             <th>Repair</th>
@@ -69,9 +65,7 @@
           </tr>
         </thead>
         <tbody id="ticketBody">
-          <tr>
-            <td colspan="13" class="empty">Loading…</td>
-          </tr>
+          <tr><td colspan="11" class="empty">Loading…</td></tr>
         </tbody>
       </table>
     </div>
@@ -87,50 +81,59 @@
       <form id="ticketForm" onsubmit="saveTicket(event)">
         <input type="hidden" id="f_id" />
         <div class="form-grid">
+
+          <div class="form-group">
+            <label>Product Name</label>
+            <select id="f_product_name" onchange="onProductChange()">
+              <option value="">— Select Product —</option>
+            </select>
+          </div>
           <div class="form-group">
             <label>Ticket ID</label>
             <input type="text" id="f_ticket_id" />
           </div>
+
           <div class="form-group">
             <label>Subject</label>
             <input type="text" id="f_subject" />
           </div>
           <div class="form-group">
-            <label>Fault Code</label>
-            <input type="text" id="f_fault_code" list="dl-fault-code" autocomplete="off" />
-          </div>
-          <div class="form-group">
-            <label>Fault Code Level 1</label>
-            <input type="text" id="f_fault_code_l1" list="dl-fault-code-l1" autocomplete="off" />
-          </div>
-          <div class="form-group">
-            <label>Fault Code Level 2</label>
-            <input type="text" id="f_fault_code_l2" list="dl-fault-code-l2" autocomplete="off" />
-          </div>
-          <div class="form-group">
             <label>Tech Person Name</label>
             <input type="text" id="f_tech_name" list="dl-tech-name" autocomplete="off" />
           </div>
+
           <div class="form-group">
             <label>First Referred Date</label>
             <input type="date" id="f_first_referred_date" />
           </div>
+          <div class="form-group"><!-- spacer --></div>
+
           <div class="form-group span2">
             <label>Symptom</label>
-            <textarea id="f_symptom" rows="2"></textarea>
+            <select id="f_symptom" onchange="onSymptomChange()">
+              <option value="">— Select Product first —</option>
+            </select>
           </div>
+
           <div class="form-group span2">
             <label>Defect</label>
-            <textarea id="f_defect" rows="2"></textarea>
+            <select id="f_defect" onchange="onDefectChange()">
+              <option value="">— Select Symptom first —</option>
+            </select>
           </div>
+
           <div class="form-group span2">
             <label>Repair</label>
-            <textarea id="f_repair" rows="2"></textarea>
+            <select id="f_repair">
+              <option value="">— Select Defect first —</option>
+            </select>
           </div>
+
           <div class="form-group span2">
             <label>Comments</label>
             <textarea id="f_comments" rows="2"></textarea>
           </div>
+
         </div>
         <div class="form-actions">
           <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
@@ -140,15 +143,12 @@
     </div>
   </div>
 
-  <!-- Suggestion lists — populated from existing ticket data -->
   <datalist id="dl-tech-name"></datalist>
-  <datalist id="dl-fault-code"></datalist>
-  <datalist id="dl-fault-code-l1"></datalist>
-  <datalist id="dl-fault-code-l2"></datalist>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="config.js"></script>
+  <script src="data.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

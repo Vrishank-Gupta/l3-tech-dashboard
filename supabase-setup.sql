@@ -2,8 +2,9 @@
 -- EXISTING INSTALL (already ran this before)?
 -- Run only these two lines in SQL Editor to add the new columns:
 -- ─────────────────────────────────────────────────────────────────
-ALTER TABLE tickets ADD COLUMN IF NOT EXISTS status    TEXT DEFAULT 'open';
-ALTER TABLE tickets ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS status       TEXT DEFAULT 'open';
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS closed_at    TIMESTAMPTZ;
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS product_name TEXT;
 
 
 -- ─────────────────────────────────────────────────────────────────
@@ -13,9 +14,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   id                  BIGSERIAL PRIMARY KEY,
   ticket_id           TEXT,
   subject             TEXT,
-  fault_code          TEXT,
-  fault_code_l1       TEXT,
-  fault_code_l2       TEXT,
+  product_name        TEXT,
   symptom             TEXT,
   defect              TEXT,
   repair              TEXT,

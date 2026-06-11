@@ -284,6 +284,7 @@ form { padding: 20px 24px; }
   text-transform: uppercase;
   letter-spacing: .4px;
 }
+.form-group select,
 .form-group input,
 .form-group textarea {
   padding: 8px 10px;
@@ -297,6 +298,7 @@ form { padding: 20px 24px; }
   resize: vertical;
   transition: border-color .15s;
 }
+.form-group select:focus,
 .form-group input:focus,
 .form-group textarea:focus {
   border-color: #3b82f6;

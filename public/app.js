@@ -1,13 +1,14 @@
-/* globals supabase, SUPABASE_URL, SUPABASE_ANON_KEY */
+/* globals supabase, SUPABASE_URL, SUPABASE_ANON_KEY, PRODUCT_DATA, XLSX */
 
 const FIELDS = [
-  'ticket_id','subject','fault_code','fault_code_l1','fault_code_l2',
-  'symptom','defect','repair','tech_name','first_referred_date','comments'
+  'ticket_id','subject','product_name',
+  'symptom','defect','repair',
+  'tech_name','first_referred_date','comments'
 ];
 
 let db            = null;
 let allTickets    = [];
-let statusFilter  = 'open';   // 'open' | 'closed' | 'all'
+let statusFilter  = 'open';
 let sortByPendency = true;
 let searchTimer   = null;
 
@@ -16,12 +17,93 @@ function init() {
   if (!SUPABASE_URL || SUPABASE_URL.includes('REPLACE')) {
     document.getElementById('setupBanner').classList.remove('hidden');
     document.getElementById('ticketBody').innerHTML =
-      '<tr><td colspan="13" class="empty">Configure Supabase credentials in config.js to get started.</td></tr>';
+      '<tr><td colspan="11" class="empty">Configure Supabase credentials in config.js to get started.</td></tr>';
     return;
   }
   db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  initProductSelect();
   loadTickets();
   refreshSuggestions();
+}
+
+// ── Product dropdown (populated from Excel data) ───────────────
+function initProductSelect() {
+  const sel = document.getElementById('f_product_name');
+  sel.innerHTML = '<option value="">— Select Product —</option>';
+  Object.keys(PRODUCT_DATA).sort().forEach(p => {
+    sel.innerHTML += `<option value="${x(p)}">${x(p)}</option>`;
+  });
+}
+
+// ── Cascading selects ─────────────────────────────────────────
+function onProductChange() {
+  const product = document.getElementById('f_product_name').value;
+  const symptoms = product && PRODUCT_DATA[product]
+    ? Object.keys(PRODUCT_DATA[product]).sort() : [];
+  populateSel('f_symptom', symptoms, '', '— Select Symptom —');
+  populateSel('f_defect',  [], '', '— Select Symptom first —');
+  populateSel('f_repair',  [], '', '— Select Defect first —');
+}
+
+function onSymptomChange() {
+  const product = document.getElementById('f_product_name').value;
+  const symptom = document.getElementById('f_symptom').value;
+  const defects = product && symptom && PRODUCT_DATA[product]?.[symptom]
+    ? Object.keys(PRODUCT_DATA[product][symptom]).sort() : [];
+  populateSel('f_defect', defects, '', '— Select Defect —');
+  populateSel('f_repair', [], '', '— Select Defect first —');
+}
+
+function onDefectChange() {
+  const product = document.getElementById('f_product_name').value;
+  const symptom = document.getElementById('f_symptom').value;
+  const defect  = document.getElementById('f_defect').value;
+  const repairs = product && symptom && defect && PRODUCT_DATA[product]?.[symptom]?.[defect]
+    ? PRODUCT_DATA[product][symptom][defect] : [];
+  populateSel('f_repair', repairs, '', '— Select Repair —');
+}
+
+// Populate a <select>, preserving currentValue even if not in options list
+function populateSel(id, options, currentValue, placeholder) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = `<option value="">${placeholder}</option>`;
+  let found = !currentValue;
+  options.forEach(o => {
+    const selected = o === currentValue;
+    if (selected) found = true;
+    sel.innerHTML += `<option value="${x(o)}"${selected ? ' selected' : ''}>${x(o)}</option>`;
+  });
+  // keep existing custom value if it wasn't in the list
+  if (!found && currentValue) {
+    sel.innerHTML += `<option value="${x(currentValue)}" selected>${x(currentValue)}</option>`;
+  }
+}
+
+// Restore all four cascading selects for an existing ticket
+function restoreCascade(t) {
+  const product  = t.product_name || '';
+  const symptom  = t.symptom      || '';
+  const defect   = t.defect       || '';
+  const repair   = t.repair       || '';
+
+  // Product
+  populateSel('f_product_name',
+    Object.keys(PRODUCT_DATA).sort(), product, '— Select Product —');
+
+  // Symptom
+  const symptoms = product && PRODUCT_DATA[product]
+    ? Object.keys(PRODUCT_DATA[product]).sort() : [];
+  populateSel('f_symptom', symptoms, symptom, '— Select Symptom —');
+
+  // Defect
+  const defects = product && symptom && PRODUCT_DATA[product]?.[symptom]
+    ? Object.keys(PRODUCT_DATA[product][symptom]).sort() : [];
+  populateSel('f_defect', defects, defect, '— Select Defect —');
+
+  // Repair
+  const repairs = product && symptom && defect && PRODUCT_DATA[product]?.[symptom]?.[defect]
+    ? PRODUCT_DATA[product][symptom][defect] : [];
+  populateSel('f_repair', repairs, repair, '— Select Repair —');
 }
 
 // ── Filter tabs ───────────────────────────────────────────────
@@ -30,7 +112,6 @@ function setFilter(f) {
   ['open','closed','all'].forEach(id =>
     document.getElementById('tab-' + id).classList.toggle('active', id === f)
   );
-  // swap sort label: closed view sorts by resolution, open by pendency
   const btn = document.getElementById('sortBtn');
   btn.textContent = sortByPendency
     ? (f === 'closed' ? 'Sort: Resolution ↓' : 'Sort: Pendency ↓')
@@ -41,10 +122,8 @@ function setFilter(f) {
 // ── Data ──────────────────────────────────────────────────────
 async function loadTickets() {
   const search = document.getElementById('searchInput').value.trim();
-
   let query = db.from('tickets').select('*');
 
-  // Status filter — treat null status as 'open' (legacy rows)
   if (statusFilter === 'open') {
     query = query.or('status.eq.open,status.is.null');
   } else if (statusFilter === 'closed') {
@@ -55,10 +134,9 @@ async function loadTickets() {
     const s = search.replace(/'/g, "''");
     query = query.or([
       `ticket_id.ilike.%${s}%`,
-      `fault_code.ilike.%${s}%`,
-      `fault_code_l1.ilike.%${s}%`,
-      `fault_code_l2.ilike.%${s}%`,
-      `tech_name.ilike.%${s}%`
+      `product_name.ilike.%${s}%`,
+      `tech_name.ilike.%${s}%`,
+      `symptom.ilike.%${s}%`,
     ].join(','));
   }
 
@@ -77,23 +155,17 @@ async function loadTickets() {
   render(allTickets);
 }
 
-// Adds display_days to each ticket:
-//   open ticket  → days since first_referred_date (pendency)
-//   closed ticket → days from first_referred_date to closed_at (resolution)
 function enrich(tickets) {
   const today = new Date();
   return tickets.map(t => {
     const out = { ...t };
     if (!t.first_referred_date) { out.display_days = null; return out; }
-
     if (t.status === 'closed' && t.closed_at) {
       out.display_days = Math.floor(
-        (new Date(t.closed_at) - new Date(t.first_referred_date)) / 86400000
-      );
+        (new Date(t.closed_at) - new Date(t.first_referred_date)) / 86400000);
     } else {
       out.display_days = Math.floor(
-        (today - new Date(t.first_referred_date)) / 86400000
-      );
+        (today - new Date(t.first_referred_date)) / 86400000);
     }
     return out;
   });
@@ -106,7 +178,7 @@ function render(tickets) {
     tickets.length === 1 ? '1 ticket' : `${tickets.length} tickets`;
 
   if (tickets.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="13" class="empty">No tickets found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="empty">No tickets found.</td></tr>';
     return;
   }
 
@@ -122,10 +194,8 @@ function render(tickets) {
     return `
     <tr class="${closed ? 'row-closed' : ''}">
       <td title="${x(t.ticket_id)}">${x(t.ticket_id)}</td>
+      <td title="${x(t.product_name)}">${x(t.product_name)}</td>
       <td title="${x(t.subject)}">${x(t.subject)}</td>
-      <td title="${x(t.fault_code)}">${x(t.fault_code)}</td>
-      <td title="${x(t.fault_code_l1)}">${x(t.fault_code_l1)}</td>
-      <td title="${x(t.fault_code_l2)}">${x(t.fault_code_l2)}</td>
       <td title="${x(t.symptom)}">${x(t.symptom)}</td>
       <td title="${x(t.defect)}">${x(t.defect)}</td>
       <td title="${x(t.repair)}">${x(t.repair)}</td>
@@ -142,10 +212,8 @@ function daysBadge(t) {
   const days = t.display_days;
   if (days === null || days === undefined)
     return '<span class="badge badge-grey">—</span>';
-
   if (t.status === 'closed')
-    return `<span class="badge badge-closed" title="Closed in ${days} day${days === 1 ? '' : 's'}">✓ ${days}d</span>`;
-
+    return `<span class="badge badge-closed" title="Closed in ${days} day${days===1?'':'s'}">✓ ${days}d</span>`;
   const cls = days >= 30 ? 'badge-red'
             : days >= 15 ? 'badge-orange'
             : days >= 7  ? 'badge-yellow'
@@ -205,22 +273,31 @@ async function reopenTicket(id) {
 
 // ── Modal ─────────────────────────────────────────────────────
 function openModal(id) {
-  FIELDS.forEach(f => { document.getElementById('f_' + f).value = ''; });
   document.getElementById('f_id').value = '';
+  // Reset plain inputs
+  ['ticket_id','subject','tech_name','first_referred_date','comments']
+    .forEach(f => { document.getElementById('f_' + f).value = ''; });
 
   if (id) {
     const t = allTickets.find(t => t.id === id);
     if (t) {
       document.getElementById('f_id').value = id;
-      FIELDS.forEach(f => { document.getElementById('f_' + f).value = t[f] ?? ''; });
+      document.getElementById('f_ticket_id').value          = t.ticket_id           || '';
+      document.getElementById('f_subject').value            = t.subject              || '';
+      document.getElementById('f_tech_name').value          = t.tech_name            || '';
+      document.getElementById('f_first_referred_date').value = t.first_referred_date || '';
+      document.getElementById('f_comments').value           = t.comments             || '';
+      restoreCascade(t);
     }
     document.getElementById('modalTitle').textContent = 'Edit Ticket';
   } else {
     document.getElementById('modalTitle').textContent = 'Add Ticket';
+    initProductSelect();
+    onProductChange();
   }
 
   document.getElementById('modalOverlay').classList.remove('hidden');
-  document.getElementById('f_ticket_id').focus();
+  document.getElementById('f_product_name').focus();
 }
 
 function closeModal() {
@@ -266,42 +343,44 @@ async function deleteTicket(id) {
   loadTickets();
 }
 
+// ── Suggestions (tech name datalist) ─────────────────────────
+async function refreshSuggestions() {
+  const { data } = await db.from('tickets').select('tech_name');
+  if (!data) return;
+  const names = [...new Set(data.map(t => t.tech_name).filter(Boolean))].sort();
+  document.getElementById('dl-tech-name').innerHTML =
+    names.map(n => `<option value="${x(n)}"></option>`).join('');
+}
+
 // ── Export ────────────────────────────────────────────────────
 function exportToExcel() {
   if (!allTickets.length) { alert('No tickets to export.'); return; }
 
   const rows = allTickets.map(t => ({
-    'Ticket ID':        t.ticket_id    || '',
-    'Subject':          t.subject      || '',
-    'Fault Code':       t.fault_code   || '',
-    'Fault Code L1':    t.fault_code_l1 || '',
-    'Fault Code L2':    t.fault_code_l2 || '',
-    'Symptom':          t.symptom      || '',
-    'Defect':           t.defect       || '',
-    'Repair':           t.repair       || '',
-    'Tech Person':      t.tech_name    || '',
-    'First Referred':   t.first_referred_date || '',
-    'Status':           t.status       || 'open',
-    'Days (Pendency / Resolution)': t.display_days !== null && t.display_days !== undefined ? t.display_days : '',
-    'Closed On':        t.closed_at ? new Date(t.closed_at).toLocaleDateString('en-IN') : '',
-    'Comments':         t.comments     || '',
+    'Ticket ID':     t.ticket_id     || '',
+    'Product':       t.product_name  || '',
+    'Subject':       t.subject       || '',
+    'Symptom':       t.symptom       || '',
+    'Defect':        t.defect        || '',
+    'Repair':        t.repair        || '',
+    'Tech Person':   t.tech_name     || '',
+    'First Referred': t.first_referred_date || '',
+    'Status':        t.status        || 'open',
+    'Days (Pendency / Resolution)': t.display_days ?? '',
+    'Closed On':     t.closed_at ? new Date(t.closed_at).toLocaleDateString('en-IN') : '',
+    'Comments':      t.comments      || '',
   }));
 
   const ws = XLSX.utils.json_to_sheet(rows);
-
-  // Column widths
   ws['!cols'] = [
-    {wch:14},{wch:24},{wch:14},{wch:16},{wch:16},
-    {wch:28},{wch:28},{wch:28},{wch:18},{wch:16},
-    {wch:10},{wch:28},{wch:14},{wch:32}
+    {wch:14},{wch:16},{wch:24},{wch:32},{wch:32},
+    {wch:32},{wch:18},{wch:16},{wch:10},{wch:28},{wch:14},{wch:32}
   ];
 
-  const wb = XLSX.utils.book_new();
+  const wb   = XLSX.utils.book_new();
   const label = statusFilter === 'all' ? 'All' : statusFilter === 'closed' ? 'Closed' : 'Open';
   XLSX.utils.book_append_sheet(wb, ws, `${label} Tickets`);
-
-  const date = new Date().toISOString().slice(0,10);
-  XLSX.writeFile(wb, `L3_Tickets_${label}_${date}.xlsx`);
+  XLSX.writeFile(wb, `L3_Tickets_${label}_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -312,30 +391,6 @@ function showError(msg) {
 }
 function hideError() {
   document.getElementById('errorMsg').classList.add('hidden');
-}
-
-// ── Suggestions (datalist) ────────────────────────────────────
-async function refreshSuggestions() {
-  const { data } = await db
-    .from('tickets')
-    .select('tech_name, fault_code, fault_code_l1, fault_code_l2');
-
-  if (!data) return;
-
-  const unique = field =>
-    [...new Set(data.map(t => t[field]).filter(Boolean))].sort((a, b) =>
-      a.localeCompare(b, undefined, { sensitivity: 'base' })
-    );
-
-  fill('dl-tech-name',      unique('tech_name'));
-  fill('dl-fault-code',     unique('fault_code'));
-  fill('dl-fault-code-l1',  unique('fault_code_l1'));
-  fill('dl-fault-code-l2',  unique('fault_code_l2'));
-}
-
-function fill(id, values) {
-  document.getElementById(id).innerHTML =
-    values.map(v => `<option value="${x(v)}"></option>`).join('');
 }
 
 // ── Start ─────────────────────────────────────────────────────
