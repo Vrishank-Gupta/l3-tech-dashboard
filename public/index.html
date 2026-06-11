@@ -28,6 +28,11 @@
 
   <main>
     <div class="toolbar">
+      <div class="filter-tabs">
+        <button id="tab-open"   class="tab active" onclick="setFilter('open')">Open</button>
+        <button id="tab-closed" class="tab"        onclick="setFilter('closed')">Closed</button>
+        <button id="tab-all"    class="tab"        onclick="setFilter('all')">All</button>
+      </div>
       <input
         type="text"
         id="searchInput"
@@ -55,7 +60,7 @@
             <th>Repair</th>
             <th>Tech Person</th>
             <th>First Referred</th>
-            <th class="col-center">Pendency<br/>(Days)</th>
+            <th class="col-center">Days</th>
             <th>Comments</th>
             <th></th>
           </tr>

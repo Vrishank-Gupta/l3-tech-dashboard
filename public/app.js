@@ -5,12 +5,13 @@ const FIELDS = [
   'symptom','defect','repair','tech_name','first_referred_date','comments'
 ];
 
-let db           = null;
-let allTickets   = [];
+let db            = null;
+let allTickets    = [];
+let statusFilter  = 'open';   // 'open' | 'closed' | 'all'
 let sortByPendency = true;
-let searchTimer  = null;
+let searchTimer   = null;
 
-// ── Bootstrap ────────────────────────────────────────────────
+// ── Bootstrap ─────────────────────────────────────────────────
 function init() {
   if (!SUPABASE_URL || SUPABASE_URL.includes('REPLACE')) {
     document.getElementById('setupBanner').classList.remove('hidden');
@@ -22,11 +23,32 @@ function init() {
   loadTickets();
 }
 
-// ── Data ─────────────────────────────────────────────────────
+// ── Filter tabs ───────────────────────────────────────────────
+function setFilter(f) {
+  statusFilter = f;
+  ['open','closed','all'].forEach(id =>
+    document.getElementById('tab-' + id).classList.toggle('active', id === f)
+  );
+  // swap sort label: closed view sorts by resolution, open by pendency
+  const btn = document.getElementById('sortBtn');
+  btn.textContent = sortByPendency
+    ? (f === 'closed' ? 'Sort: Resolution ↓' : 'Sort: Pendency ↓')
+    : 'Sort: Newest First';
+  loadTickets();
+}
+
+// ── Data ──────────────────────────────────────────────────────
 async function loadTickets() {
   const search = document.getElementById('searchInput').value.trim();
 
   let query = db.from('tickets').select('*');
+
+  // Status filter — treat null status as 'open' (legacy rows)
+  if (statusFilter === 'open') {
+    query = query.or('status.eq.open,status.is.null');
+  } else if (statusFilter === 'closed') {
+    query = query.eq('status', 'closed');
+  }
 
   if (search) {
     const s = search.replace(/'/g, "''");
@@ -40,17 +62,13 @@ async function loadTickets() {
   }
 
   const { data, error } = await query;
-
-  if (error) {
-    showError('Could not load tickets: ' + error.message);
-    return;
-  }
+  if (error) { showError('Could not load tickets: ' + error.message); return; }
 
   hideError();
-  allTickets = addPendency(data || []);
+  allTickets = enrich(data || []);
 
   if (sortByPendency) {
-    allTickets.sort((a, b) => (b.pendency_days ?? -1) - (a.pendency_days ?? -1));
+    allTickets.sort((a, b) => (b.display_days ?? -1) - (a.display_days ?? -1));
   } else {
     allTickets.sort((a, b) => b.id - a.id);
   }
@@ -58,14 +76,26 @@ async function loadTickets() {
   render(allTickets);
 }
 
-function addPendency(tickets) {
+// Adds display_days to each ticket:
+//   open ticket  → days since first_referred_date (pendency)
+//   closed ticket → days from first_referred_date to closed_at (resolution)
+function enrich(tickets) {
   const today = new Date();
-  return tickets.map(t => ({
-    ...t,
-    pendency_days: t.first_referred_date
-      ? Math.floor((today - new Date(t.first_referred_date)) / 86400000)
-      : null
-  }));
+  return tickets.map(t => {
+    const out = { ...t };
+    if (!t.first_referred_date) { out.display_days = null; return out; }
+
+    if (t.status === 'closed' && t.closed_at) {
+      out.display_days = Math.floor(
+        (new Date(t.closed_at) - new Date(t.first_referred_date)) / 86400000
+      );
+    } else {
+      out.display_days = Math.floor(
+        (today - new Date(t.first_referred_date)) / 86400000
+      );
+    }
+    return out;
+  });
 }
 
 // ── Render ────────────────────────────────────────────────────
@@ -79,8 +109,17 @@ function render(tickets) {
     return;
   }
 
-  tbody.innerHTML = tickets.map(t => `
-    <tr>
+  tbody.innerHTML = tickets.map(t => {
+    const closed = t.status === 'closed';
+    const actions = closed
+      ? `<button class="btn-icon" title="Reopen"  onclick="reopenTicket(${t.id})">↩️</button>
+         <button class="btn-icon del" title="Delete" onclick="deleteTicket(${t.id})">🗑️</button>`
+      : `<button class="btn-icon" title="Edit"   onclick="openModal(${t.id})">✏️</button>
+         <button class="btn-icon close" title="Close ticket" onclick="closeTicket(${t.id})">✅</button>
+         <button class="btn-icon del"  title="Delete"        onclick="deleteTicket(${t.id})">🗑️</button>`;
+
+    return `
+    <tr class="${closed ? 'row-closed' : ''}">
       <td title="${x(t.ticket_id)}">${x(t.ticket_id)}</td>
       <td title="${x(t.subject)}">${x(t.subject)}</td>
       <td title="${x(t.fault_code)}">${x(t.fault_code)}</td>
@@ -91,24 +130,26 @@ function render(tickets) {
       <td title="${x(t.repair)}">${x(t.repair)}</td>
       <td title="${x(t.tech_name)}">${x(t.tech_name)}</td>
       <td>${fmtDate(t.first_referred_date)}</td>
-      <td class="col-center">${badge(t.pendency_days)}</td>
+      <td class="col-center">${daysBadge(t)}</td>
       <td title="${x(t.comments)}">${x(t.comments)}</td>
-      <td class="action-cell">
-        <button class="btn-icon" title="Edit"   onclick="openModal(${t.id})">✏️</button>
-        <button class="btn-icon del" title="Delete" onclick="deleteTicket(${t.id})">🗑️</button>
-      </td>
-    </tr>
-  `).join('');
+      <td class="action-cell">${actions}</td>
+    </tr>`;
+  }).join('');
 }
 
-function badge(days) {
+function daysBadge(t) {
+  const days = t.display_days;
   if (days === null || days === undefined)
     return '<span class="badge badge-grey">—</span>';
+
+  if (t.status === 'closed')
+    return `<span class="badge badge-closed" title="Closed in ${days} day${days === 1 ? '' : 's'}">✓ ${days}d</span>`;
+
   const cls = days >= 30 ? 'badge-red'
             : days >= 15 ? 'badge-orange'
             : days >= 7  ? 'badge-yellow'
             :               'badge-green';
-  return `<span class="badge ${cls}">${days}</span>`;
+  return `<span class="badge ${cls}">${days}d</span>`;
 }
 
 function fmtDate(d) {
@@ -133,8 +174,31 @@ function onSearch() {
 function toggleSort() {
   sortByPendency = !sortByPendency;
   const btn = document.getElementById('sortBtn');
-  btn.textContent = sortByPendency ? 'Sort: Pendency ↓' : 'Sort: Newest First';
+  if (sortByPendency) {
+    btn.textContent = statusFilter === 'closed' ? 'Sort: Resolution ↓' : 'Sort: Pendency ↓';
+  } else {
+    btn.textContent = 'Sort: Newest First';
+  }
   btn.classList.toggle('active', sortByPendency);
+  loadTickets();
+}
+
+// ── Close / Reopen ────────────────────────────────────────────
+async function closeTicket(id) {
+  if (!confirm('Mark this ticket as closed?')) return;
+  const { error } = await db.from('tickets')
+    .update({ status: 'closed', closed_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) { showError('Failed to close ticket: ' + error.message); return; }
+  loadTickets();
+}
+
+async function reopenTicket(id) {
+  if (!confirm('Reopen this ticket?')) return;
+  const { error } = await db.from('tickets')
+    .update({ status: 'open', closed_at: null })
+    .eq('id', id);
+  if (error) { showError('Failed to reopen ticket: ' + error.message); return; }
   loadTickets();
 }
 
@@ -147,9 +211,7 @@ function openModal(id) {
     const t = allTickets.find(t => t.id === id);
     if (t) {
       document.getElementById('f_id').value = id;
-      FIELDS.forEach(f => {
-        document.getElementById('f_' + f).value = t[f] ?? '';
-      });
+      FIELDS.forEach(f => { document.getElementById('f_' + f).value = t[f] ?? ''; });
     }
     document.getElementById('modalTitle').textContent = 'Edit Ticket';
   } else {
@@ -190,14 +252,13 @@ async function saveTicket(e) {
 
   btn.disabled = false;
   btn.textContent = 'Save Ticket';
-
   if (error) { showError('Save failed: ' + error.message); return; }
   closeModal();
   loadTickets();
 }
 
 async function deleteTicket(id) {
-  if (!confirm('Delete this ticket? This cannot be undone.')) return;
+  if (!confirm('Delete this ticket permanently? This cannot be undone.')) return;
   const { error } = await db.from('tickets').delete().eq('id', id);
   if (error) { showError('Delete failed: ' + error.message); return; }
   loadTickets();

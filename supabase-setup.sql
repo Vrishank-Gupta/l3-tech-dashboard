@@ -1,5 +1,14 @@
--- Run this once in Supabase → SQL Editor → New query
+-- ─────────────────────────────────────────────────────────────────
+-- EXISTING INSTALL (already ran this before)?
+-- Run only these two lines in SQL Editor to add the new columns:
+-- ─────────────────────────────────────────────────────────────────
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS status    TEXT DEFAULT 'open';
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;
 
+
+-- ─────────────────────────────────────────────────────────────────
+-- FRESH INSTALL — run everything below (safe to run on existing too)
+-- ─────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS tickets (
   id                  BIGSERIAL PRIMARY KEY,
   ticket_id           TEXT,
@@ -13,13 +22,14 @@ CREATE TABLE IF NOT EXISTS tickets (
   tech_name           TEXT,
   first_referred_date DATE,
   comments            TEXT,
+  status              TEXT DEFAULT 'open',
+  closed_at           TIMESTAMPTZ,
   created_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enable Row Level Security
 ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
 
--- Allow full access via the public (anon) key — internal tool, no auth needed
+DROP POLICY IF EXISTS "public_full_access" ON tickets;
 CREATE POLICY "public_full_access"
   ON tickets FOR ALL
   TO anon

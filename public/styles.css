@@ -45,8 +45,35 @@ header h1 { font-size: 18px; font-weight: 600; letter-spacing: .3px; }
 /* ── Main ── */
 main { padding: 20px 24px; }
 
+/* ── Filter tabs ── */
+.filter-tabs {
+  display: flex;
+  background: #e2e8f0;
+  border-radius: 6px;
+  padding: 3px;
+  gap: 2px;
+}
+.tab {
+  background: none;
+  border: none;
+  padding: 5px 14px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.tab.active {
+  background: #fff;
+  color: #1e293b;
+  box-shadow: 0 1px 3px rgba(0,0,0,.12);
+}
+.tab:not(.active):hover { color: #1e293b; }
+
 /* ── Toolbar ── */
-.toolbar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.toolbar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
 .toolbar input {
   flex: 1;
   min-width: 240px;
@@ -167,6 +194,11 @@ td.col-center { text-align: center; max-width: 80px; }
 .badge-orange { background: #fed7aa; color: #c2410c; }
 .badge-red    { background: #fee2e2; color: #b91c1c; }
 .badge-grey   { background: #f1f5f9; color: #94a3b8; }
+.badge-closed { background: #e0f2fe; color: #0369a1; }
+
+/* ── Closed row ── */
+tr.row-closed td { color: #94a3b8; }
+tr.row-closed td:first-child { color: #64748b; }
 
 /* ── Row actions ── */
 .action-cell { white-space: nowrap; max-width: 72px; }
@@ -180,8 +212,9 @@ td.col-center { text-align: center; max-width: 80px; }
   color: #64748b;
   transition: background .15s, color .15s;
 }
-.btn-icon:hover     { background: #e2e8f0; color: #1e293b; }
-.btn-icon.del:hover { background: #fee2e2; color: #b91c1c; }
+.btn-icon:hover      { background: #e2e8f0; color: #1e293b; }
+.btn-icon.del:hover  { background: #fee2e2; color: #b91c1c; }
+.btn-icon.close:hover{ background: #dcfce7; color: #15803d; }
 
 /* ── Modal ── */
 .modal-overlay {
