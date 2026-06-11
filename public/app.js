@@ -1,109 +1,162 @@
-/* globals supabase, SUPABASE_URL, SUPABASE_ANON_KEY, PRODUCT_DATA, XLSX */
+/* globals supabase, SUPABASE_URL, SUPABASE_ANON_KEY, PRODUCT_DATA, XLSX, TomSelect */
 
-const FIELDS = [
-  'ticket_id','subject','agent_name','product_name',
-  'symptom','defect','repair',
-  'tech_name','first_referred_date','comments'
-];
+const TECH_NAMES  = ['Abhay', 'Subodh', 'Abhishek', 'Surender'];
+const AGENT_NAMES = ['Gaurav', 'Premjeet'];
 
-let db            = null;
-let allTickets    = [];
-let statusFilter  = 'open';
+// Plain text fields processed by the generic loop in saveTicket
+const FIELDS = ['ticket_id', 'subject', 'first_referred_date', 'comments'];
+
+const tsMap = {};   // selectId → TomSelect instance
+let db           = null;
+let allTickets   = [];
+let statusFilter = 'open';
 let sortByPendency = true;
-let searchTimer   = null;
+let searchTimer  = null;
 
 // ── Bootstrap ─────────────────────────────────────────────────
 function init() {
   if (!SUPABASE_URL || SUPABASE_URL.includes('REPLACE')) {
     document.getElementById('setupBanner').classList.remove('hidden');
     document.getElementById('ticketBody').innerHTML =
-      '<tr><td colspan="11" class="empty">Configure Supabase credentials in config.js to get started.</td></tr>';
+      '<tr><td colspan="12" class="empty">Configure Supabase credentials in config.js to get started.</td></tr>';
     return;
   }
   db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  initProductSelect();
   loadTickets();
-  refreshSuggestions();
+  syncCustomNames();
 }
 
-// ── Product dropdown (populated from Excel data) ───────────────
-function initProductSelect() {
-  const sel = document.getElementById('f_product_name');
-  sel.innerHTML = '<option value="">— Select Product —</option>';
-  Object.keys(PRODUCT_DATA).sort().forEach(p => {
-    sel.innerHTML += `<option value="${x(p)}">${x(p)}</option>`;
-  });
-}
-
-// ── Cascading selects ─────────────────────────────────────────
-function onProductChange() {
-  const product = document.getElementById('f_product_name').value;
-  const symptoms = product && PRODUCT_DATA[product]
-    ? Object.keys(PRODUCT_DATA[product]).sort() : [];
-  populateSel('f_symptom', symptoms, '', '— Select Symptom —');
-  populateSel('f_defect',  [], '', '— Select Symptom first —');
-  populateSel('f_repair',  [], '', '— Select Defect first —');
-}
-
-function onSymptomChange() {
-  const product = document.getElementById('f_product_name').value;
-  const symptom = document.getElementById('f_symptom').value;
-  const defects = product && symptom && PRODUCT_DATA[product]?.[symptom]
-    ? Object.keys(PRODUCT_DATA[product][symptom]).sort() : [];
-  populateSel('f_defect', defects, '', '— Select Defect —');
-  populateSel('f_repair', [], '', '— Select Defect first —');
-}
-
-function onDefectChange() {
-  const product = document.getElementById('f_product_name').value;
-  const symptom = document.getElementById('f_symptom').value;
-  const defect  = document.getElementById('f_defect').value;
-  const repairs = product && symptom && defect && PRODUCT_DATA[product]?.[symptom]?.[defect]
-    ? PRODUCT_DATA[product][symptom][defect] : [];
-  populateSel('f_repair', repairs, '', '— Select Repair —');
-}
-
-// Populate a <select>, preserving currentValue even if not in options list
-function populateSel(id, options, currentValue, placeholder) {
-  const sel = document.getElementById(id);
-  sel.innerHTML = `<option value="">${placeholder}</option>`;
+// ── Tom Select helpers ─────────────────────────────────────────
+// Destroy old instance, repopulate native <select>, create new TomSelect.
+function updateSel(id, options, currentValue, placeholder, onChange) {
+  if (tsMap[id]) { tsMap[id].destroy(); delete tsMap[id]; }
+  const el = document.getElementById(id);
+  el.innerHTML = `<option value="">${placeholder}</option>`;
   let found = !currentValue;
   options.forEach(o => {
-    const selected = o === currentValue;
-    if (selected) found = true;
-    sel.innerHTML += `<option value="${x(o)}"${selected ? ' selected' : ''}>${x(o)}</option>`;
+    const sel = o === currentValue;
+    if (sel) found = true;
+    el.innerHTML += `<option value="${x(o)}"${sel ? ' selected' : ''}>${x(o)}</option>`;
   });
-  // keep existing custom value if it wasn't in the list
+  // Preserve values from DB that aren't in the Excel list
   if (!found && currentValue) {
-    sel.innerHTML += `<option value="${x(currentValue)}" selected>${x(currentValue)}</option>`;
+    el.innerHTML += `<option value="${x(currentValue)}" selected>${x(currentValue)}</option>`;
+  }
+  const opts = { allowEmptyOption: true, dropdownParent: 'body' };
+  if (onChange) opts.onChange = onChange;
+  tsMap[id] = new TomSelect(id, opts);
+  return tsMap[id];
+}
+
+// ── Cascading selects ──────────────────────────────────────────
+function onProductChange(value) {
+  const product = value || '';
+  const symptoms = product && PRODUCT_DATA[product]
+    ? Object.keys(PRODUCT_DATA[product]).sort() : [];
+  updateSel('f_symptom', symptoms, '', '— Select Symptom —', onSymptomChange);
+  updateSel('f_defect',  [], '', '— Select Symptom first —', onDefectChange);
+  updateSel('f_repair',  [], '', '— Select Defect first —');
+}
+
+function onSymptomChange(value) {
+  const product = tsMap['f_product_name']?.getValue() || '';
+  const symptom = value || '';
+  const defects = product && symptom && PRODUCT_DATA[product]?.[symptom]
+    ? Object.keys(PRODUCT_DATA[product][symptom]).sort() : [];
+  updateSel('f_defect', defects, '',
+    symptom ? '— Select Defect —' : '— Select Symptom first —', onDefectChange);
+  updateSel('f_repair', [], '', '— Select Defect first —');
+}
+
+function onDefectChange(value) {
+  const product = tsMap['f_product_name']?.getValue() || '';
+  const symptom = tsMap['f_symptom']?.getValue() || '';
+  const defect  = value || '';
+  const repairs = product && symptom && defect && PRODUCT_DATA[product]?.[symptom]?.[defect]
+    ? PRODUCT_DATA[product][symptom][defect] : [];
+  updateSel('f_repair', repairs, '',
+    defect ? '— Select Repair —' : '— Select Defect first —');
+}
+
+// ── Name fields (Tech / Agent) ─────────────────────────────────
+function getCustomNames(key) {
+  try { return JSON.parse(localStorage.getItem(key) || '[]'); }
+  catch { return []; }
+}
+
+function saveCustomName(key, name) {
+  const names = getCustomNames(key);
+  if (name && !names.includes(name)) {
+    localStorage.setItem(key, JSON.stringify([...names, name]));
   }
 }
 
-// Restore all four cascading selects for an existing ticket
-function restoreCascade(t) {
-  const product  = t.product_name || '';
-  const symptom  = t.symptom      || '';
-  const defect   = t.defect       || '';
-  const repair   = t.repair       || '';
+function buildNameSelect(selId, fixedNames, localKey, onChange) {
+  if (tsMap[selId]) { tsMap[selId].destroy(); delete tsMap[selId]; }
+  const custom = getCustomNames(localKey);
+  const el = document.getElementById(selId);
+  el.innerHTML = `<option value="">— Select —</option>`;
+  [...fixedNames, ...custom].forEach(n => {
+    el.innerHTML += `<option value="${x(n)}">${x(n)}</option>`;
+  });
+  el.innerHTML += `<option value="__other__">Other…</option>`;
+  const opts = { allowEmptyOption: true, dropdownParent: 'body' };
+  if (onChange) opts.onChange = onChange;
+  tsMap[selId] = new TomSelect(selId, opts);
+}
 
-  // Product
-  populateSel('f_product_name',
-    Object.keys(PRODUCT_DATA).sort(), product, '— Select Product —');
+// Set value for a name field when editing — handles known names and DB-only values
+function setNameSel(selId, customId, value, fixedNames, localKey) {
+  if (!value) return;
+  const allKnown = [...fixedNames, ...getCustomNames(localKey)];
+  const customInput = document.getElementById(customId);
+  if (allKnown.includes(value)) {
+    tsMap[selId]?.setValue(value, true);
+  } else {
+    // Value exists in DB but not in known list — add it as a selectable option
+    tsMap[selId]?.addOption({ value: x(value), text: x(value) });
+    tsMap[selId]?.addItem(value, true);
+  }
+  customInput.classList.add('hidden');
+  customInput.value = '';
+}
 
-  // Symptom
-  const symptoms = product && PRODUCT_DATA[product]
-    ? Object.keys(PRODUCT_DATA[product]).sort() : [];
-  populateSel('f_symptom', symptoms, symptom, '— Select Symptom —');
+function onTechChange(value) {
+  const el = document.getElementById('f_tech_name_custom');
+  el.classList.toggle('hidden', value !== '__other__');
+  if (value !== '__other__') el.value = '';
+  else setTimeout(() => el.focus(), 50);
+}
 
-  // Defect
-  const defects = product && symptom && PRODUCT_DATA[product]?.[symptom]
-    ? Object.keys(PRODUCT_DATA[product][symptom]).sort() : [];
-  populateSel('f_defect', defects, defect, '— Select Defect —');
+function onAgentChange(value) {
+  const el = document.getElementById('f_agent_name_custom');
+  el.classList.toggle('hidden', value !== '__other__');
+  if (value !== '__other__') el.value = '';
+  else setTimeout(() => el.focus(), 50);
+}
 
-  // Repair
-  const repairs = product && symptom && defect && PRODUCT_DATA[product]?.[symptom]?.[defect]
-    ? PRODUCT_DATA[product][symptom][defect] : [];
-  populateSel('f_repair', repairs, repair, '— Select Repair —');
+function resolveNameField(selId, customId, localKey) {
+  const selVal = tsMap[selId]?.getValue() || '';
+  if (selVal === '__other__') {
+    const custom = document.getElementById(customId).value.trim();
+    if (custom) saveCustomName(localKey, custom);
+    return custom || null;
+  }
+  return selVal || null;
+}
+
+// On startup, pull any custom names from DB into localStorage
+async function syncCustomNames() {
+  const { data } = await db.from('tickets').select('tech_name, agent_name');
+  if (!data) return;
+  const knownTech  = new Set(TECH_NAMES);
+  const knownAgent = new Set(AGENT_NAMES);
+  [...new Set(data.map(t => t.tech_name).filter(Boolean))]
+    .filter(n => !knownTech.has(n))
+    .forEach(n => saveCustomName('custom_tech_names', n));
+  [...new Set(data.map(t => t.agent_name).filter(Boolean))]
+    .filter(n => !knownAgent.has(n))
+    .forEach(n => saveCustomName('custom_agent_names', n));
 }
 
 // ── Filter tabs ───────────────────────────────────────────────
@@ -275,37 +328,77 @@ async function reopenTicket(id) {
 // ── Modal ─────────────────────────────────────────────────────
 function openModal(id) {
   document.getElementById('f_id').value = '';
-  // Reset plain inputs
-  ['ticket_id','subject','agent_name','tech_name','comments']
-    .forEach(f => { document.getElementById('f_' + f).value = ''; });
-  // Default date to today for new tickets
+  document.getElementById('f_ticket_id').value = '';
+  document.getElementById('f_subject').value = '';
   document.getElementById('f_first_referred_date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('f_comments').value = '';
 
+  let ticket = null;
   if (id) {
-    const t = allTickets.find(t => t.id === id);
-    if (t) {
-      document.getElementById('f_id').value = id;
-      document.getElementById('f_ticket_id').value           = t.ticket_id           || '';
-      document.getElementById('f_subject').value             = t.subject              || '';
-      document.getElementById('f_agent_name').value          = t.agent_name           || '';
-      document.getElementById('f_tech_name').value           = t.tech_name            || '';
-      document.getElementById('f_first_referred_date').value = t.first_referred_date  || '';
-      document.getElementById('f_comments').value            = t.comments             || '';
-      restoreCascade(t);
+    ticket = allTickets.find(t => t.id === id);
+    if (ticket) {
+      document.getElementById('f_id').value                  = id;
+      document.getElementById('f_ticket_id').value           = ticket.ticket_id           || '';
+      document.getElementById('f_subject').value             = ticket.subject             || '';
+      document.getElementById('f_first_referred_date').value = ticket.first_referred_date || '';
+      document.getElementById('f_comments').value            = ticket.comments            || '';
     }
     document.getElementById('modalTitle').textContent = 'Edit Ticket';
   } else {
     document.getElementById('modalTitle').textContent = 'Add Ticket';
-    initProductSelect();
-    onProductChange();
   }
 
   document.getElementById('modalOverlay').classList.remove('hidden');
-  document.getElementById('f_product_name').focus();
+  // Init Tom Select after modal is visible to avoid hidden-element sizing issues
+  initModalSelects(ticket);
+  document.getElementById('f_ticket_id').focus();
+}
+
+function initModalSelects(ticket) {
+  const product = ticket?.product_name || '';
+  const symptom = ticket?.symptom      || '';
+  const defect  = ticket?.defect       || '';
+  const repair  = ticket?.repair       || '';
+
+  updateSel('f_product_name', Object.keys(PRODUCT_DATA).sort(), product,
+    '— Select Product —', onProductChange);
+
+  const symptoms = product && PRODUCT_DATA[product]
+    ? Object.keys(PRODUCT_DATA[product]).sort() : [];
+  updateSel('f_symptom', symptoms, symptom,
+    product ? '— Select Symptom —' : '— Select Product first —', onSymptomChange);
+
+  const defects = product && symptom && PRODUCT_DATA[product]?.[symptom]
+    ? Object.keys(PRODUCT_DATA[product][symptom]).sort() : [];
+  updateSel('f_defect', defects, defect,
+    symptom ? '— Select Defect —' : '— Select Symptom first —', onDefectChange);
+
+  const repairs = product && symptom && defect && PRODUCT_DATA[product]?.[symptom]?.[defect]
+    ? PRODUCT_DATA[product][symptom][defect] : [];
+  updateSel('f_repair', repairs, repair,
+    defect ? '— Select Repair —' : '— Select Defect first —');
+
+  // Tech name
+  buildNameSelect('f_tech_name_sel', TECH_NAMES, 'custom_tech_names', onTechChange);
+  document.getElementById('f_tech_name_custom').classList.add('hidden');
+  document.getElementById('f_tech_name_custom').value = '';
+  if (ticket?.tech_name) {
+    setNameSel('f_tech_name_sel', 'f_tech_name_custom', ticket.tech_name, TECH_NAMES, 'custom_tech_names');
+  }
+
+  // Agent name
+  buildNameSelect('f_agent_name_sel', AGENT_NAMES, 'custom_agent_names', onAgentChange);
+  document.getElementById('f_agent_name_custom').classList.add('hidden');
+  document.getElementById('f_agent_name_custom').value = '';
+  if (ticket?.agent_name) {
+    setNameSel('f_agent_name_sel', 'f_agent_name_custom', ticket.agent_name, AGENT_NAMES, 'custom_agent_names');
+  }
 }
 
 function closeModal() {
   document.getElementById('modalOverlay').classList.add('hidden');
+  ['f_product_name','f_symptom','f_defect','f_repair','f_tech_name_sel','f_agent_name_sel']
+    .forEach(id => { if (tsMap[id]) { tsMap[id].destroy(); delete tsMap[id]; } });
 }
 
 function overlayClick(e) {
@@ -320,10 +413,20 @@ async function saveTicket(e) {
   btn.textContent = 'Saving…';
 
   const payload = {};
+
+  // Plain text fields
   FIELDS.forEach(f => {
-    const v = document.getElementById('f_' + f).value.trim();
-    payload[f] = v || null;
+    payload[f] = document.getElementById('f_' + f).value.trim() || null;
   });
+
+  // Cascade selects — use Tom Select getValue() which is always in sync
+  ['product_name','symptom','defect','repair'].forEach(f => {
+    payload[f] = tsMap['f_' + f]?.getValue() || null;
+  });
+
+  // Name fields with "Other" handling
+  payload.tech_name  = resolveNameField('f_tech_name_sel',  'f_tech_name_custom',  'custom_tech_names');
+  payload.agent_name = resolveNameField('f_agent_name_sel', 'f_agent_name_custom', 'custom_agent_names');
 
   let error;
   if (id) {
@@ -337,7 +440,6 @@ async function saveTicket(e) {
   if (error) { showError('Save failed: ' + error.message); return; }
   closeModal();
   loadTickets();
-  refreshSuggestions();
 }
 
 async function deleteTicket(id) {
@@ -345,15 +447,6 @@ async function deleteTicket(id) {
   const { error } = await db.from('tickets').delete().eq('id', id);
   if (error) { showError('Delete failed: ' + error.message); return; }
   loadTickets();
-}
-
-// ── Suggestions (tech name datalist) ─────────────────────────
-async function refreshSuggestions() {
-  const { data } = await db.from('tickets').select('tech_name, agent_name');
-  if (!data) return;
-  const uniq = field => [...new Set(data.map(t => t[field]).filter(Boolean))].sort();
-  document.getElementById('dl-tech-name').innerHTML  = uniq('tech_name').map(n  => `<option value="${x(n)}"></option>`).join('');
-  document.getElementById('dl-agent-name').innerHTML = uniq('agent_name').map(n => `<option value="${x(n)}"></option>`).join('');
 }
 
 // ── Export ────────────────────────────────────────────────────
@@ -382,7 +475,7 @@ function exportToExcel() {
     {wch:32},{wch:18},{wch:16},{wch:10},{wch:28},{wch:14},{wch:32}
   ];
 
-  const wb   = XLSX.utils.book_new();
+  const wb    = XLSX.utils.book_new();
   const label = statusFilter === 'all' ? 'All' : statusFilter === 'closed' ? 'Closed' : 'Open';
   XLSX.utils.book_append_sheet(wb, ws, `${label} Tickets`);
   XLSX.writeFile(wb, `L3_Tickets_${label}_${new Date().toISOString().slice(0,10)}.xlsx`);

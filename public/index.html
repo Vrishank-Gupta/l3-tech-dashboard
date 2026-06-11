@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>L3 Support Tracker</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.default.min.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -85,7 +86,7 @@
 
           <div class="form-group">
             <label>Product Name</label>
-            <select id="f_product_name" onchange="onProductChange()">
+            <select id="f_product_name">
               <option value="">— Select Product —</option>
             </select>
           </div>
@@ -100,12 +101,28 @@
           </div>
           <div class="form-group">
             <label>Agent Name</label>
-            <input type="text" id="f_agent_name" list="dl-agent-name" autocomplete="off" />
+            <select id="f_agent_name_sel">
+              <option value="">— Select Agent —</option>
+              <option value="Gaurav">Gaurav</option>
+              <option value="Premjeet">Premjeet</option>
+              <option value="__other__">Other…</option>
+            </select>
+            <input type="text" id="f_agent_name_custom" class="name-other-input hidden"
+                   placeholder="Type agent name…" autocomplete="off" />
           </div>
 
           <div class="form-group">
             <label>Tech Person Name</label>
-            <input type="text" id="f_tech_name" list="dl-tech-name" autocomplete="off" />
+            <select id="f_tech_name_sel">
+              <option value="">— Select Tech —</option>
+              <option value="Abhay">Abhay</option>
+              <option value="Subodh">Subodh</option>
+              <option value="Abhishek">Abhishek</option>
+              <option value="Surender">Surender</option>
+              <option value="__other__">Other…</option>
+            </select>
+            <input type="text" id="f_tech_name_custom" class="name-other-input hidden"
+                   placeholder="Type tech name…" autocomplete="off" />
           </div>
           <div class="form-group">
             <label>First Referred Date</label>
@@ -114,14 +131,14 @@
 
           <div class="form-group span2">
             <label>Symptom</label>
-            <select id="f_symptom" onchange="onSymptomChange()">
+            <select id="f_symptom">
               <option value="">— Select Product first —</option>
             </select>
           </div>
 
           <div class="form-group span2">
             <label>Defect</label>
-            <select id="f_defect" onchange="onDefectChange()">
+            <select id="f_defect">
               <option value="">— Select Symptom first —</option>
             </select>
           </div>
@@ -147,11 +164,9 @@
     </div>
   </div>
 
-  <datalist id="dl-tech-name"></datalist>
-  <datalist id="dl-agent-name"></datalist>
-
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
   <script src="config.js"></script>
   <script src="data.js"></script>
   <script src="app.js"></script>
