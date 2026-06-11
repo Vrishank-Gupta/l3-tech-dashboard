@@ -264,6 +264,44 @@ async function deleteTicket(id) {
   loadTickets();
 }
 
+// ── Export ────────────────────────────────────────────────────
+function exportToExcel() {
+  if (!allTickets.length) { alert('No tickets to export.'); return; }
+
+  const rows = allTickets.map(t => ({
+    'Ticket ID':        t.ticket_id    || '',
+    'Subject':          t.subject      || '',
+    'Fault Code':       t.fault_code   || '',
+    'Fault Code L1':    t.fault_code_l1 || '',
+    'Fault Code L2':    t.fault_code_l2 || '',
+    'Symptom':          t.symptom      || '',
+    'Defect':           t.defect       || '',
+    'Repair':           t.repair       || '',
+    'Tech Person':      t.tech_name    || '',
+    'First Referred':   t.first_referred_date || '',
+    'Status':           t.status       || 'open',
+    'Days (Pendency / Resolution)': t.display_days !== null && t.display_days !== undefined ? t.display_days : '',
+    'Closed On':        t.closed_at ? new Date(t.closed_at).toLocaleDateString('en-IN') : '',
+    'Comments':         t.comments     || '',
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+
+  // Column widths
+  ws['!cols'] = [
+    {wch:14},{wch:24},{wch:14},{wch:16},{wch:16},
+    {wch:28},{wch:28},{wch:28},{wch:18},{wch:16},
+    {wch:10},{wch:28},{wch:14},{wch:32}
+  ];
+
+  const wb = XLSX.utils.book_new();
+  const label = statusFilter === 'all' ? 'All' : statusFilter === 'closed' ? 'Closed' : 'Open';
+  XLSX.utils.book_append_sheet(wb, ws, `${label} Tickets`);
+
+  const date = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `L3_Tickets_${label}_${date}.xlsx`);
+}
+
 // ── Helpers ───────────────────────────────────────────────────
 function showError(msg) {
   const el = document.getElementById('errorMsg');

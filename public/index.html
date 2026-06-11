@@ -42,6 +42,9 @@
       <button id="sortBtn" class="btn-sort active" onclick="toggleSort()">
         Sort: Pendency ↓
       </button>
+      <button class="btn-export" onclick="exportToExcel()" title="Export current view to Excel">
+        ↓ Export Excel
+      </button>
     </div>
 
     <div id="errorMsg" class="error-msg hidden"></div>
@@ -138,6 +141,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
