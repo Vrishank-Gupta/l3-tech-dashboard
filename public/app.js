@@ -21,6 +21,7 @@ function init() {
   }
   db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   loadTickets();
+  refreshSuggestions();
 }
 
 // ── Filter tabs ───────────────────────────────────────────────
@@ -255,6 +256,7 @@ async function saveTicket(e) {
   if (error) { showError('Save failed: ' + error.message); return; }
   closeModal();
   loadTickets();
+  refreshSuggestions();
 }
 
 async function deleteTicket(id) {
@@ -310,6 +312,30 @@ function showError(msg) {
 }
 function hideError() {
   document.getElementById('errorMsg').classList.add('hidden');
+}
+
+// ── Suggestions (datalist) ────────────────────────────────────
+async function refreshSuggestions() {
+  const { data } = await db
+    .from('tickets')
+    .select('tech_name, fault_code, fault_code_l1, fault_code_l2');
+
+  if (!data) return;
+
+  const unique = field =>
+    [...new Set(data.map(t => t[field]).filter(Boolean))].sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base' })
+    );
+
+  fill('dl-tech-name',      unique('tech_name'));
+  fill('dl-fault-code',     unique('fault_code'));
+  fill('dl-fault-code-l1',  unique('fault_code_l1'));
+  fill('dl-fault-code-l2',  unique('fault_code_l2'));
+}
+
+function fill(id, values) {
+  document.getElementById(id).innerHTML =
+    values.map(v => `<option value="${x(v)}"></option>`).join('');
 }
 
 // ── Start ─────────────────────────────────────────────────────
