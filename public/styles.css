@@ -201,7 +201,13 @@ tr.row-closed td { color: #94a3b8; }
 tr.row-closed td:first-child { color: #64748b; }
 
 /* ── Row actions ── */
-.action-cell { white-space: nowrap; max-width: 72px; }
+.action-cell {
+  white-space: nowrap;
+  width: 1px;        /* shrink-wrap to content */
+  max-width: none;   /* override td max-width */
+  overflow: visible;
+  text-overflow: unset;
+}
 .btn-icon {
   background: none;
   border: none;
