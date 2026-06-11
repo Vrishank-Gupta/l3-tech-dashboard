@@ -91,8 +91,9 @@ function saveCustomName(key, name) {
   }
 }
 
+// Name selects use plain <select> (no Tom Select) — short lists don't need search,
+// and native onchange is 100% reliable for the "Other" reveal logic.
 function buildNameSelect(selId, fixedNames, localKey, onChange) {
-  if (tsMap[selId]) { tsMap[selId].destroy(); delete tsMap[selId]; }
   const custom = getCustomNames(localKey);
   const el = document.getElementById(selId);
   el.innerHTML = `<option value="">— Select —</option>`;
@@ -100,22 +101,24 @@ function buildNameSelect(selId, fixedNames, localKey, onChange) {
     el.innerHTML += `<option value="${x(n)}">${x(n)}</option>`;
   });
   el.innerHTML += `<option value="__other__">Other…</option>`;
-  const opts = { allowEmptyOption: true, dropdownParent: 'body' };
-  if (onChange) opts.onChange = onChange;
-  tsMap[selId] = new TomSelect(selId, opts);
+  el.onchange = onChange ? () => onChange(el.value) : null;
 }
 
 // Set value for a name field when editing — handles known names and DB-only values
 function setNameSel(selId, customId, value, fixedNames, localKey) {
   if (!value) return;
   const allKnown = [...fixedNames, ...getCustomNames(localKey)];
+  const el = document.getElementById(selId);
   const customInput = document.getElementById(customId);
   if (allKnown.includes(value)) {
-    tsMap[selId]?.setValue(value, true);
+    el.value = value;
   } else {
-    // Value exists in DB but not in known list — add it as a selectable option
-    tsMap[selId]?.addOption({ value: x(value), text: x(value) });
-    tsMap[selId]?.addItem(value, true);
+    // Value exists in DB but not in the known list — add it before "Other…"
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = value;
+    el.insertBefore(opt, el.lastElementChild);
+    el.value = value;
   }
   customInput.classList.add('hidden');
   customInput.value = '';
@@ -136,7 +139,7 @@ function onAgentChange(value) {
 }
 
 function resolveNameField(selId, customId, localKey) {
-  const selVal = tsMap[selId]?.getValue() || '';
+  const selVal = document.getElementById(selId).value || '';
   if (selVal === '__other__') {
     const custom = document.getElementById(customId).value.trim();
     if (custom) saveCustomName(localKey, custom);
@@ -397,7 +400,7 @@ function initModalSelects(ticket) {
 
 function closeModal() {
   document.getElementById('modalOverlay').classList.add('hidden');
-  ['f_product_name','f_symptom','f_defect','f_repair','f_tech_name_sel','f_agent_name_sel']
+  ['f_product_name','f_symptom','f_defect','f_repair']
     .forEach(id => { if (tsMap[id]) { tsMap[id].destroy(); delete tsMap[id]; } });
 }
 
