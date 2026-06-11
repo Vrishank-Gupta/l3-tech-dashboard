@@ -1,8 +1,2 @@
-// ─────────────────────────────────────────────────────────────
-//  Step 1: Create a free project at https://supabase.com
-//  Step 2: Go to Project Settings → API
-//  Step 3: Copy "Project URL" and "anon / public" key below
-// ─────────────────────────────────────────────────────────────
-
-const SUPABASE_URL      = 'https://REPLACE_WITH_YOUR_PROJECT_ID.supabase.co';
-const SUPABASE_ANON_KEY = 'REPLACE_WITH_YOUR_ANON_KEY';
+const SUPABASE_URL      = 'https://zjkdxzigwfotljenisxd.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpqa2R4emlnd2ZvdGxqZW5pc3hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNjQzMTUsImV4cCI6MjA5Njc0MDMxNX0.-nBVdTaXWzfjRvx3gFAgf5u60aUc-8ygNUmEb5zw3Fg';
