@@ -48,18 +48,35 @@ function updateSel(id, options, currentValue, placeholder, onChange) {
   return tsMap[id];
 }
 
+function lookupKey(source, value) {
+  if (!value) return '';
+  if (source[value]) return value;
+  const wanted = String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+  return Object.keys(source).find(k =>
+    k.toLowerCase().replace(/[^a-z0-9]/g, '') === wanted
+  ) || '';
+}
+
+function productKey(value) {
+  return lookupKey(PRODUCT_DATA, value);
+}
+
 // ── Cascading selects ──────────────────────────────────────────
 function onProductChange(value) {
-  const product = value || '';
+  const product = productKey(value);
+  if (value && product && product !== value) {
+    tsMap['f_product_name']?.setValue(product, true);
+  }
   const symptoms = product && PRODUCT_DATA[product]
     ? Object.keys(PRODUCT_DATA[product]).sort() : [];
-  updateSel('f_symptom', symptoms, '', '— Select Symptom —', onSymptomChange);
+  updateSel('f_symptom', symptoms, '',
+    product ? '— Select Symptom —' : '— Select Product first —', onSymptomChange);
   updateSel('f_defect',  [], '', '— Select Symptom first —', onDefectChange);
   updateSel('f_repair',  [], '', '— Select Defect first —');
 }
 
 function onSymptomChange(value) {
-  const product = tsMap['f_product_name']?.getValue() || '';
+  const product = productKey(tsMap['f_product_name']?.getValue() || '');
   const symptom = value || '';
   const defects = product && symptom && PRODUCT_DATA[product]?.[symptom]
     ? Object.keys(PRODUCT_DATA[product][symptom]).sort() : [];
@@ -69,7 +86,7 @@ function onSymptomChange(value) {
 }
 
 function onDefectChange(value) {
-  const product = tsMap['f_product_name']?.getValue() || '';
+  const product = productKey(tsMap['f_product_name']?.getValue() || '');
   const symptom = tsMap['f_symptom']?.getValue() || '';
   const defect  = value || '';
   const repairs = product && symptom && defect && PRODUCT_DATA[product]?.[symptom]?.[defect]
@@ -358,7 +375,8 @@ function openModal(id) {
 }
 
 function initModalSelects(ticket) {
-  const product = ticket?.product_name || '';
+  const product = productKey(ticket?.product_name || '') || ticket?.product_name || '';
+  const productForCascade = productKey(product);
   const symptom = ticket?.symptom      || '';
   const defect  = ticket?.defect       || '';
   const repair  = ticket?.repair       || '';
@@ -366,18 +384,18 @@ function initModalSelects(ticket) {
   updateSel('f_product_name', Object.keys(PRODUCT_DATA).sort(), product,
     '— Select Product —', onProductChange);
 
-  const symptoms = product && PRODUCT_DATA[product]
-    ? Object.keys(PRODUCT_DATA[product]).sort() : [];
+  const symptoms = productForCascade && PRODUCT_DATA[productForCascade]
+    ? Object.keys(PRODUCT_DATA[productForCascade]).sort() : [];
   updateSel('f_symptom', symptoms, symptom,
-    product ? '— Select Symptom —' : '— Select Product first —', onSymptomChange);
+    productForCascade ? '— Select Symptom —' : '— Select Product first —', onSymptomChange);
 
-  const defects = product && symptom && PRODUCT_DATA[product]?.[symptom]
-    ? Object.keys(PRODUCT_DATA[product][symptom]).sort() : [];
+  const defects = productForCascade && symptom && PRODUCT_DATA[productForCascade]?.[symptom]
+    ? Object.keys(PRODUCT_DATA[productForCascade][symptom]).sort() : [];
   updateSel('f_defect', defects, defect,
     symptom ? '— Select Defect —' : '— Select Symptom first —', onDefectChange);
 
-  const repairs = product && symptom && defect && PRODUCT_DATA[product]?.[symptom]?.[defect]
-    ? PRODUCT_DATA[product][symptom][defect] : [];
+  const repairs = productForCascade && symptom && defect && PRODUCT_DATA[productForCascade]?.[symptom]?.[defect]
+    ? PRODUCT_DATA[productForCascade][symptom][defect] : [];
   updateSel('f_repair', repairs, repair,
     defect ? '— Select Repair —' : '— Select Defect first —');
 
@@ -423,9 +441,11 @@ async function saveTicket(e) {
   });
 
   // Cascade selects — use Tom Select getValue() which is always in sync
-  ['product_name','symptom','defect','repair'].forEach(f => {
+  ['symptom','defect','repair'].forEach(f => {
     payload[f] = tsMap['f_' + f]?.getValue() || null;
   });
+  const selectedProduct = tsMap['f_product_name']?.getValue() || '';
+  payload.product_name = productKey(selectedProduct) || selectedProduct || null;
 
   // Name fields with "Other" handling
   payload.tech_name  = resolveNameField('f_tech_name_sel',  'f_tech_name_custom',  'custom_tech_names');
