@@ -44,7 +44,7 @@ function updateSel(id, options, currentValue, placeholder, onChange) {
   }
   const opts = { allowEmptyOption: true, dropdownParent: 'body' };
   if (onChange) opts.onChange = onChange;
-  tsMap[id] = new TomSelect(id, opts);
+  tsMap[id] = new TomSelect(el, opts);
   return tsMap[id];
 }
 
